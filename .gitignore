@@ -1,0 +1,46 @@
+# ===========================
+# Variables de entorno (SECRETOS)
+# ===========================
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# ===========================
+# Dependencias
+# ===========================
+node_modules/
+
+# ===========================
+# Next.js
+# ===========================
+.next/
+out/
+
+# ===========================
+# Prisma - Cliente generado
+# ===========================
+generated/
+
+# ===========================
+# Builds
+# ===========================
+dist/
+build/
+
+# ===========================
+# Sistema operativo
+# ===========================
+.DS_Store
+Thumbs.db
+
+# ===========================
+# Editores e IDEs
+# ===========================
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
