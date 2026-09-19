@@ -1,7 +1,5 @@
-export default function Page() {
-  return (
-    <main>
-      <h1>Bienvenido al Sistema de Rifas</h1>
-    </main>
-  )
+import { redirect } from "next/navigation";
+
+export default function Home() {
+  redirect("/login");
 }

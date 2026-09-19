@@ -1,0 +1,30 @@
+@theme {
+  --color-primary: #F4350A;
+  --color-secondary: #FC5606;
+  --color-accent: #FCB307;
+  --color-accent-light: #FCCC1E;
+  --color-navy: #051424;
+  --color-background: #FCEBCA;
+  --color-surface: #FCF2DB;
+  --color-success: #16B65D;
+  --color-info: #0490F8;
+  --color-dark: #050909;
+}
+
+:root {
+  --primary: #F4350A;
+  --secondary: #FC5606;
+  --accent: #FCB307;
+  --accent-light: #FCCC1E;
+  --navy: #051424;
+  --background: #FCEBCA;
+  --surface: #FCF2DB;
+  --success: #16B65D;
+  --info: #0490F8;
+  --dark: #050909;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--navy);
+}

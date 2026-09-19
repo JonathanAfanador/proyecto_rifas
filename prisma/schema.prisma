@@ -10,37 +10,103 @@ datasource db {
   provider = "postgresql"
 }
 
+// ==============================
+// ENUMS (Listas de valores fijos)
+// ==============================
+enum Role {
+  SUPERADMIN
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum SessionAction {
+  LOGIN
+  LOGOUT
+}
+
+enum RaffleStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  CANCELLED
+}
+
+// ==============================
+// MODELOS
+// ==============================
+
 model User {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email        String   @unique
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String     @unique
   passwordHash String
+
+  // Control de acceso y estado
+  role         Role       @default(ADMIN)
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
   recoveryCode String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+
+  // Soft delete
+  deletedAt    DateTime?
+
+  // Auditoría
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relaciones
+  sessions     SessionLog[]
+}
+
+model SessionLog {
+  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String        @db.Uuid
+  user      User          @relation(fields: [userId], references: [id])
+
+  action    SessionAction
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime      @default(now())
 }
 
 model Template {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name         String
   imageUrl     String
   maxPositions Int
   positions    Json
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  Raffles      Raffle[]
+
+  // Soft delete
+  deletedAt    DateTime?
+
+  // Auditoría
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relaciones
+  raffles      Raffle[]
 }
 
 model Raffle {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name             String
   rangeStart       Int
   rangeEnd         Int
   digits           Int
   numbersPerTicket Int
-  templateId       String   @db.Uuid
-  template         Template @relation(fields: [templateId], references: [id])
-  status           String   @default("PENDING")
+  templateId       String       @db.Uuid
+  template         Template     @relation(fields: [templateId], references: [id])
+  status           RaffleStatus @default(PENDING)
   pdfUrl           String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+
+  // Soft delete
+  deletedAt        DateTime?
+
+  // Auditoría
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 }
