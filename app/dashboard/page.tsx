@@ -1,16 +1,38 @@
+// app/dashboard/page.tsx
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { DeleteButton } from "@/components/DeleteButton";
+import { Pagination } from "@/components/Pagination";
 
-export default async function DashboardPage() {
-  // 1. Consultar plantillas
+export default async function DashboardPage({
+  searchParams,
+}: {
+  // 1. Cambiamos el tipo a Promise
+  searchParams: Promise<{ page?: string }>;
+}) {
+  // 2. Usamos await para "desempaquetar" la promesa
+  const resolvedParams = await searchParams;
+  const currentPage = Number(resolvedParams?.page) || 1;
+  const itemsPerPage = 10;
+  
+  // 1. Consultar plantillas (Ocultando las eliminadas lógicamente)
   const templates = await prisma.template.findMany({
+    where: { deletedAt: null }, // Solo plantillas activas
     orderBy: { createdAt: "desc" },
   });
 
-  // 2. Consultar rifas (incluyendo los datos de la plantilla usada)
+  // 2. Consultar rifas PAGINADAS y sin eliminar
+  const totalRaffles = await prisma.raffle.count({
+    where: { deletedAt: null },
+  });
+  const totalPages = Math.ceil(totalRaffles / itemsPerPage);
+
   const raffles = await prisma.raffle.findMany({
+    where: { deletedAt: null }, // Solo historial activo
     include: { template: true },
     orderBy: { createdAt: "desc" },
+    take: itemsPerPage,
+    skip: (currentPage - 1) * itemsPerPage,
   });
 
   return (
@@ -54,12 +76,24 @@ export default async function DashboardPage() {
                       {template.maxPositions} posiciones mapeadas
                     </p>
                   </div>
-                  <Link 
-                    href={`/dashboard/raffle/new?templateId=${template.id}`}
-                    className="mt-4 w-full block text-center py-2.5 bg-[var(--background)] text-[var(--navy)] font-black rounded-lg hover:bg-[var(--accent)] hover:text-white transition-all text-sm border border-[var(--accent)]/30"
-                  >
-                    Generar Rifa PDF
-                  </Link>
+                  <div>
+                    <Link 
+                      href={`/dashboard/raffle/new?templateId=${template.id}`}
+                      className="mt-4 w-full block text-center py-2.5 bg-[var(--background)] text-[var(--navy)] font-black rounded-lg hover:bg-[var(--accent)] hover:text-white transition-all text-sm border border-[var(--accent)]/30"
+                    >
+                      Generar Rifa PDF
+                    </Link>
+                    {/* Botón de eliminar plantilla integrado aquí */}
+                    <div className="mt-2 flex gap-2 justify-center items-center">
+                      <Link 
+                        href={`/dashboard/templates/${template.id}`}
+                        className="text-xs font-bold px-3 py-1.5 rounded transition-colors bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 inline-block"
+                      >
+                        Editar
+                      </Link>
+                      <DeleteButton id={template.id} type="template" />
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -139,7 +173,8 @@ export default async function DashboardPage() {
                           </span>
                         )}
                       </td>
-                                <td className="px-6 py-4 text-right">
+                      {/* Celda con flexbox para alinear el botón de descarga y el de eliminar */}
+                      <td className="px-6 py-4 text-right flex justify-end items-center gap-3">
                         {raffle.pdfUrl ? (
                           <a 
                             href={raffle.pdfUrl} 
@@ -152,6 +187,8 @@ export default async function DashboardPage() {
                         ) : (
                           <span className="text-xs font-bold text-[var(--navy)]/40">Generando...</span>
                         )}
+                        {/* Botón de eliminar historial integrado aquí */}
+                        <DeleteButton id={raffle.id} type="raffle" />
                       </td>
                     </tr>
                   ))
@@ -159,6 +196,8 @@ export default async function DashboardPage() {
               </tbody>
             </table>
           </div>
+          {/* Componente de paginación integrado aquí, justo debajo de la tabla */}
+          <Pagination totalPages={totalPages} />
         </div>
       </section>
 

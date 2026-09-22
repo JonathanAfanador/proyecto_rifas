@@ -1,9 +1,10 @@
+// actions/raffle.ts
 "use server";
 
 import { prisma } from "@/lib/prisma";
 import { PDFDocument, rgb } from "pdf-lib";
 import { createClient } from "@supabase/supabase-js";
-import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache"; // CAMBIO 1: Importamos revalidatePath en lugar de redirect
 
 // Inicializar cliente de Supabase para el servidor
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -122,11 +123,12 @@ export async function createRaffleAction(formData: FormData) {
       },
     });
 
+    // CAMBIO 2: En lugar de redirigir, refrescamos la caché y devolvemos éxito
+    revalidatePath("/dashboard");
+    return { success: true };
+
   } catch (error: any) {
     console.error("Error al generar la rifa:", error);
     return { error: "Ocurrió un error inesperado al generar el PDF." };
   }
-
-  // Redirigir al dashboard para ver el resultado inmediatamente
-  redirect("/dashboard");
 }

@@ -1,8 +1,10 @@
+// app/dashboard/templates/page.tsx
 "use client";
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { saveTemplateAction } from "@/actions/templates";
+import { Modal } from "@/components/Modal"; // IMPORTAMOS EL MODAL
 
 export default function TemplatesPage() {
   const router = useRouter();
@@ -12,6 +14,15 @@ export default function TemplatesPage() {
   const [templateName, setTemplateName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   
+  // ESTADOS PARA EL MODAL DE ERROR
+  const [modalState, setModalState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: "warning" | "success" | "danger";
+    isSuccessRedirect?: boolean;
+  }>({ isOpen: false, title: "", message: "", type: "warning" });
+
   const imageRef = useRef<HTMLImageElement>(null);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,19 +60,45 @@ export default function TemplatesPage() {
       const result = await saveTemplateAction(formData);
       
       if (result?.error) {
-        alert(result.error);
+        setModalState({ isOpen: true, title: "No se pudo guardar", message: result.error, type: "warning" });
         setIsSaving(false);
       } else if (result?.success) {
-        router.push("/dashboard");
+        // AQUÍ MOSTRAMOS EL ÉXITO EN LUGAR DE REDIRIGIR INMEDIATAMENTE
+        setModalState({ 
+          isOpen: true, 
+          title: "¡Plantilla Creada!", 
+          message: "Tu diseño se ha guardado correctamente.", 
+          type: "success",
+          isSuccessRedirect: true 
+        });
+        setIsSaving(false);
       }
     } catch (error) {
-      alert("Ocurrió un error de conexión.");
+      setModalState({ isOpen: true, title: "Error de conexión", message: "Ocurrió un problema inesperado.", type: "danger" });
       setIsSaving(false);
+    }
+  };
+  const closeModal = () => {
+    setModalState(prev => ({ ...prev, isOpen: false }));
+    // Si era un modal de éxito, al cerrar navegamos al dashboard
+    if (modalState.isSuccessRedirect) {
+      router.push("/dashboard");
     }
   };
 
   return (
     <div className="space-y-6">
+      <Modal 
+        isOpen={modalState.isOpen}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.type === "success" ? "Continuar" : "Entendido"}
+        cancelText={modalState.type === "success" ? null : undefined} // Oculta cancelar si es éxito
+        onConfirm={closeModal}
+        onCancel={modalState.type !== "success" ? closeModal : undefined}
+      />
+
       <div>
         <h1 className="text-3xl font-black text-[var(--navy)] tracking-tight">Configurar Plantilla</h1>
         <p className="text-[var(--navy)]/60 font-medium mt-1">Sube la imagen del bono, nombra tu plantilla y marca las posiciones.</p>
@@ -101,6 +138,16 @@ export default function TemplatesPage() {
               >
                 Deshacer punto
               </button>
+              
+              {/* NUEVO BOTÓN DE CANCELAR EN LA CREACIÓN */}
+              <button 
+                onClick={() => router.push("/dashboard")}
+                disabled={isSaving}
+                className="px-6 py-2 bg-[var(--surface)] text-[var(--navy)] font-bold rounded-lg disabled:opacity-50 hover:bg-[var(--background)] transition-colors border border-[var(--accent)]/20 text-sm"
+              >
+                Cancelar
+              </button>
+              
               <button 
                 onClick={handleSave}
                 disabled={positions.length === 0 || !templateName || isSaving}

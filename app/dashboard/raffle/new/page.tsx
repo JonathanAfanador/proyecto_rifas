@@ -1,21 +1,29 @@
+// app/dashboard/raffle/new/page.tsx
 "use client";
 
 import { useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { createRaffleAction } from "@/actions/raffle";
 import Link from "next/link";
+import { Modal } from "@/components/Modal"; // IMPORTAMOS EL MODAL
 
-// En Next.js 15, searchParams es una promesa que debemos desenvolver
 export default function NewRafflePage({ searchParams }: { searchParams: Promise<{ templateId?: string }> }) {
   const router = useRouter();
   
-  // Desempaquetamos los parámetros de la URL para obtener el ID de la plantilla
   const resolvedParams = use(searchParams);
   const templateId = resolvedParams.templateId;
 
   const [isSaving, setIsSaving] = useState(false);
+  
+  // ESTADOS PARA EL MODAL DE ÉXITO/ERROR
+  const [modalState, setModalState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: "warning" | "success" | "danger";
+    isSuccessRedirect?: boolean;
+  }>({ isOpen: false, title: "", message: "", type: "warning" });
 
-  // Si alguien entra a esta ruta sin seleccionar una plantilla, le mostramos un error
   if (!templateId) {
     return (
       <div className="bg-white p-10 rounded-xl shadow-sm border border-[var(--accent)]/20 text-center">
@@ -32,25 +40,60 @@ export default function NewRafflePage({ searchParams }: { searchParams: Promise<
     setIsSaving(true);
     
     const formData = new FormData(e.currentTarget);
-    formData.append("templateId", templateId); // Inyectamos el ID oculto
+    formData.append("templateId", templateId);
 
-    const result = await createRaffleAction(formData);
-    
-    if (result?.error) {
-      alert(result.error);
-      setIsSaving(false);
-    } else if (result?.success) {
-      // Si se guardó correctamente, volvemos al dashboard
+    try {
+      const result = await createRaffleAction(formData);
+      
+      if (result?.error) {
+        // EN LUGAR DE alert(), ABRIMOS EL MODAL
+        setModalState({ isOpen: true, title: "Error al generar", message: result.error, type: "warning" });
+        setIsSaving(false);
+      } else if (result?.success) {
+        // MOSTRAMOS EL MODAL DE ÉXITO VERDE
+        setModalState({ 
+          isOpen: true, 
+          title: "¡PDF Generado!", 
+          message: "El sorteo se ha procesado correctamente. Ahora podrás descargar el archivo desde el historial.", 
+          type: "success",
+          isSuccessRedirect: true 
+        });
+        setIsSaving(false);
+      }
+    } catch (error) {
+       // EN LUGAR DE alert(), ABRIMOS EL MODAL
+       setModalState({ isOpen: true, title: "Error de servidor", message: "Ocurrió un problema inesperado.", type: "danger" });
+       setIsSaving(false);
+    }
+  };
+
+  const closeModal = () => {
+    setModalState(prev => ({ ...prev, isOpen: false }));
+    // Si era un modal de éxito, al cerrar navegamos al dashboard
+    if (modalState.isSuccessRedirect) {
       router.push("/dashboard");
     }
   };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      
+      {/* RENDERIZAMOS EL MODAL AL INICIO */}
+      <Modal 
+        isOpen={modalState.isOpen}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.type === "success" ? "Ir al Historial" : "Entendido"}
+        cancelText={modalState.type === "success" ? null : undefined} // Oculta cancelar si es éxito
+        onConfirm={closeModal}
+        onCancel={modalState.type !== "success" ? closeModal : undefined}
+      />
+
       <div>
         <h1 className="text-3xl font-black text-[var(--navy)] tracking-tight">Configurar Sorteo</h1>
         <p className="text-[var(--navy)]/60 font-medium mt-1">
-          Define la matemática de tu rifa. El sistema se encargará de generar el PDF en segundo plano.
+          Define la matemática de tu rifa. El sistema generará el PDF al guardar.
         </p>
       </div>
 
@@ -142,7 +185,7 @@ export default function NewRafflePage({ searchParams }: { searchParams: Promise<
             disabled={isSaving}
             className="flex-1 py-3 bg-[var(--primary)] text-white font-bold rounded-lg disabled:opacity-50 hover:bg-[var(--secondary)] transition-colors text-sm shadow-md flex items-center justify-center gap-2"
           >
-            {isSaving ? "Guardando configuración..." : "Guardar e Iniciar Generación"}
+            {isSaving ? "Generando PDF, por favor espera..." : "Guardar y Generar Sorteo"}
           </button>
         </div>
       </form>
