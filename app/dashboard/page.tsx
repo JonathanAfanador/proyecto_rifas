@@ -2,96 +2,553 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { DeleteButton } from "@/components/DeleteButton";
-import { Pagination } from "@/components/Pagination";
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDate(date: Date): string {
+  return new Intl.DateTimeFormat("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+// ─── Iconos SVG ───────────────────────────────────────────────────────────────
+
+function IconLayout({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <path d="M3 9h18M9 21V9" />
+    </svg>
+  );
+}
+
+function IconPlus({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function IconTicket({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M2 9a1 1 0 0 1 1-1h18a1 1 0 0 1 1 1v2a2 2 0 0 0 0 4v2a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-2a2 2 0 0 0 0-4V9z" />
+    </svg>
+  );
+}
+
+function IconHistory({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15 15" />
+    </svg>
+  );
+}
+
+function IconEdit({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function IconEmpty() {
+  return (
+    <svg viewBox="0 0 80 80" fill="none" className="w-16 h-16 opacity-25" aria-hidden="true">
+      <rect x="10" y="10" width="60" height="60" rx="12" stroke="currentColor"
+        strokeWidth="2" strokeDasharray="6 4" />
+      <path d="M28 40h24M40 28v24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconStar({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+    </svg>
+  );
+}
+
+function IconArrow({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M5 12h14M12 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+function IconDownload({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+import { SearchInput } from "@/components/SearchInput";
+
+// ─── Página principal ──────────────────────────────────────────────────────────
 export default async function DashboardPage({
   searchParams,
 }: {
-  // 1. Cambiamos el tipo a Promise
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ q?: string }>;
 }) {
-  // 2. Usamos await para "desempaquetar" la promesa
   const resolvedParams = await searchParams;
-  const currentPage = Number(resolvedParams?.page) || 1;
-  const itemsPerPage = 10;
-  
-  // 1. Consultar plantillas (Ocultando las eliminadas lógicamente)
-  const templates = await prisma.template.findMany({
-    where: { deletedAt: null }, // Solo plantillas activas
-    orderBy: { createdAt: "desc" },
-  });
+  const query = resolvedParams?.q || "";
 
-  // 2. Consultar rifas PAGINADAS y sin eliminar
-  const totalRaffles = await prisma.raffle.count({
-    where: { deletedAt: null },
-  });
-  const totalPages = Math.ceil(totalRaffles / itemsPerPage);
+  const templateWhereClause: any = {
+    deletedAt: null,
+    ...(query ? { name: { contains: query, mode: "insensitive" } } : {}),
+  };
 
-  const raffles = await prisma.raffle.findMany({
-    where: { deletedAt: null }, // Solo historial activo
-    include: { template: true },
-    orderBy: { createdAt: "desc" },
-    take: itemsPerPage,
-    skip: (currentPage - 1) * itemsPerPage,
-  });
+  // Datos reales desde Prisma
+  const [templates, completedRaffles, lastRaffle] = await Promise.all([
+    prisma.template.findMany({
+      where: templateWhereClause,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.raffle.count({
+      where: { status: "COMPLETED", deletedAt: null },
+    }),
+    prisma.raffle.findFirst({
+      where: { deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      select: { name: true, createdAt: true, status: true },
+    }),
+  ]);
+
+  const totalTemplates = templates.length;
 
   return (
     <div className="space-y-10">
-      
-      {/* =========================================
-          SECCIÓN 1: PLANTILLAS
-      ========================================= */}
-      <section>
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+
+      {/* ══════════════════════════════════════════════════════════
+          CABECERA — Bienvenida editorial
+      ══════════════════════════════════════════════════════════ */}
+      <header className="relative">
+        {/* Decoración geométrica de fondo */}
+        <div
+          className="absolute -top-4 -right-6 w-48 h-48 rounded-full opacity-[0.06] pointer-events-none"
+          style={{ background: "var(--primary)" }}
+          aria-hidden="true"
+        />
+        <div
+          className="absolute top-8 -right-2 w-24 h-24 rounded-full opacity-[0.08] pointer-events-none"
+          style={{ background: "var(--accent)" }}
+          aria-hidden="true"
+        />
+
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-black text-[var(--navy)] tracking-tight">Plantillas</h1>
-            <p className="text-[var(--navy)]/60 font-medium mt-1">
-              Selecciona una base para generar una nueva rifa.
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] mb-1"
+              style={{ color: "var(--secondary)" }}>
+              Centro de Control
+            </p>
+            <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-none"
+              style={{ color: "var(--navy)" }}>
+              Panel Principal
+            </h1>
+            <p className="mt-2 text-sm font-medium" style={{ color: "rgba(5,20,36,0.45)" }}>
+              Gestiona plantillas, genera rifas y descarga PDFs al instante.
             </p>
           </div>
-          <Link
-            href="/dashboard/templates"
-            className="px-6 py-2.5 bg-[var(--primary)] text-white font-bold rounded-lg hover:bg-[var(--secondary)] transition-colors shadow-md text-sm text-center inline-block"
+
+          {/* CTA buttons principales */}
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/dashboard/templates"
+              className="group inline-flex items-center gap-2 px-5 py-2.5 font-black text-sm rounded-xl shadow-sm
+                         hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+              style={{ background: "var(--navy)", color: "white" }}
+            >
+              <span
+                className="w-5 h-5 rounded-md flex items-center justify-center transition-colors duration-200"
+                style={{ background: "rgba(255,255,255,0.12)" }}
+              >
+                <IconPlus />
+              </span>
+              Nueva Plantilla
+            </Link>
+            <Link
+              href="/dashboard/history"
+              className="group inline-flex items-center gap-2 px-5 py-2.5 font-black text-sm rounded-xl shadow-sm
+                         hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 border-2"
+              style={{
+                background: "transparent",
+                color: "var(--navy)",
+                borderColor: "var(--navy)",
+              }}
+            >
+              <IconHistory />
+              Ver Historial
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* ══════════════════════════════════════════════════════════
+          KPI CARDS — Métricas operativas
+      ══════════════════════════════════════════════════════════ */}
+      <section aria-label="Métricas del sistema">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+
+          {/* KPI 1 — Plantillas activas */}
+          <div
+            className="group relative overflow-hidden rounded-2xl p-6 shadow-sm
+                        hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 border"
+            style={{
+              background: "white",
+              borderColor: "rgba(252,179,7,0.2)",
+            }}
           >
-            + Nueva Plantilla
-          </Link>
+            {/* Accent strip lateral */}
+            <div
+              className="absolute left-0 top-4 bottom-4 w-1 rounded-r-full"
+              style={{ background: "var(--accent)" }}
+              aria-hidden="true"
+            />
+            {/* Decoración de fondo */}
+            <div
+              className="absolute -bottom-4 -right-4 w-20 h-20 rounded-full opacity-[0.06] group-hover:opacity-[0.1] transition-opacity duration-300"
+              style={{ background: "var(--accent)" }}
+              aria-hidden="true"
+            />
+
+            <div className="pl-3">
+              <div className="flex items-start justify-between mb-3">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
+                  style={{ background: "rgba(252,179,7,0.12)", color: "var(--accent)" }}
+                >
+                  <IconLayout className="w-5 h-5" />
+                </div>
+                <span
+                  className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full"
+                  style={{ background: "rgba(252,179,7,0.12)", color: "var(--accent)" }}
+                >
+                  Activas
+                </span>
+              </div>
+              <p
+                className="text-5xl font-black tracking-tight leading-none"
+                style={{ color: "var(--navy)" }}
+              >
+                {totalTemplates}
+              </p>
+              <p className="mt-1.5 text-xs font-semibold uppercase tracking-wider"
+                style={{ color: "rgba(5,20,36,0.45)" }}>
+                Plantillas Activas
+              </p>
+            </div>
+          </div>
+
+          {/* KPI 2 — Sorteos completados */}
+          <div
+            className="group relative overflow-hidden rounded-2xl p-6 shadow-sm
+                        hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 border"
+            style={{
+              background: "white",
+              borderColor: "rgba(244,53,10,0.15)",
+            }}
+          >
+            <div
+              className="absolute left-0 top-4 bottom-4 w-1 rounded-r-full"
+              style={{ background: "var(--primary)" }}
+              aria-hidden="true"
+            />
+            <div
+              className="absolute -bottom-4 -right-4 w-20 h-20 rounded-full opacity-[0.05] group-hover:opacity-[0.09] transition-opacity duration-300"
+              style={{ background: "var(--primary)" }}
+              aria-hidden="true"
+            />
+
+            <div className="pl-3">
+              <div className="flex items-start justify-between mb-3">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
+                  style={{ background: "rgba(244,53,10,0.08)", color: "var(--primary)" }}
+                >
+                  <IconTicket className="w-5 h-5" />
+                </div>
+                <span
+                  className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full"
+                  style={{ background: "rgba(244,53,10,0.08)", color: "var(--primary)" }}
+                >
+                  Completados
+                </span>
+              </div>
+              <p
+                className="text-5xl font-black tracking-tight leading-none"
+                style={{ color: "var(--navy)" }}
+              >
+                {completedRaffles}
+              </p>
+              <p className="mt-1.5 text-xs font-semibold uppercase tracking-wider"
+                style={{ color: "rgba(5,20,36,0.45)" }}>
+                Sorteos Generados
+              </p>
+            </div>
+          </div>
+
+          {/* KPI 3 — Última actividad */}
+          <div
+            className="group relative overflow-hidden rounded-2xl p-6 shadow-sm
+                        hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 border"
+            style={{
+              background: "white",
+              borderColor: "rgba(252,179,7,0.15)",
+            }}
+          >
+            <div
+              className="absolute left-0 top-4 bottom-4 w-1 rounded-r-full"
+              style={{ background: "var(--accent)" }}
+              aria-hidden="true"
+            />
+            <div
+              className="absolute -bottom-4 -right-4 w-24 h-24 rounded-full opacity-[0.05] group-hover:opacity-[0.09] transition-opacity duration-300"
+              style={{ background: "var(--accent)" }}
+              aria-hidden="true"
+            />
+
+            <div className="pl-3">
+              <div className="flex items-start justify-between mb-3">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
+                  style={{ background: "rgba(252,179,7,0.12)", color: "var(--accent)" }}
+                >
+                  <IconHistory className="w-5 h-5" />
+                </div>
+                <span
+                  className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full"
+                  style={{ background: "rgba(252,179,7,0.12)", color: "var(--accent)" }}
+                >
+                  Reciente
+                </span>
+              </div>
+
+              {lastRaffle ? (
+                <>
+                  <p
+                    className="text-base font-black tracking-tight leading-tight line-clamp-2"
+                    style={{ color: "var(--navy)" }}
+                  >
+                    {lastRaffle.name}
+                  </p>
+                  <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-wider"
+                    style={{ color: "rgba(5,20,36,0.45)" }}>
+                    {formatDate(lastRaffle.createdAt)}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p
+                    className="text-2xl font-black tracking-tight leading-none"
+                    style={{ color: "rgba(5,20,36,0.35)" }}
+                  >
+                    —
+                  </p>
+                  <p className="mt-1.5 text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: "rgba(5,20,36,0.45)" }}>
+                    Última Actividad
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      
+
+      {/* ══════════════════════════════════════════════════════════
+          SECCIÓN — PLANTILLAS
+      ══════════════════════════════════════════════════════════ */}
+      <section>
+        {/* Encabezado */}
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-7">
+          <div className="flex items-start gap-3">
+            <div
+              className="mt-0.5 flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center shadow-sm"
+              style={{ background: "var(--accent)", color: "var(--navy)" }}
+            >
+              <IconLayout className="w-5 h-5" />
+            </div>
+            <div>
+              <p
+                className="text-[10px] font-black uppercase tracking-[0.18em] mb-0.5"
+                style={{ color: "var(--secondary)" }}
+              >
+                Gestor
+              </p>
+              <h2
+                className="text-2xl font-black tracking-tight leading-none"
+                style={{ color: "var(--navy)" }}
+              >
+                Plantillas
+              </h2>
+              <p className="text-sm font-medium mt-1" style={{ color: "rgba(5,20,36,0.45)" }}>
+                Selecciona una base para generar una nueva rifa.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div className="w-full sm:w-64">
+              <SearchInput placeholder="Buscar plantilla por nombre..." />
+            </div>
+            <Link
+              href="/dashboard/templates"
+              className="group inline-flex items-center gap-2 px-5 py-2.5 font-black text-sm rounded-xl
+                         hover:opacity-90 transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 whitespace-nowrap justify-center"
+              style={{ background: "var(--navy)", color: "white" }}
+            >
+              <span
+                className="w-5 h-5 rounded-md flex items-center justify-center transition-colors duration-200"
+                style={{ background: "rgba(255,255,255,0.12)" }}
+              >
+                <IconPlus />
+              </span>
+              Nueva Plantilla
+            </Link>
+          </div>
         </div>
 
+        {/* Grid de plantillas */}
         {templates.length === 0 ? (
-          <div className="bg-white p-10 rounded-xl shadow-sm border border-[var(--accent)]/20 text-center">
-            <p className="text-[var(--navy)]/70 font-medium mb-4">No tienes plantillas configuradas todavía.</p>
+          <div
+            className="rounded-2xl border shadow-sm"
+            style={{ background: "white", borderColor: "rgba(252,179,7,0.2)" }}
+          >
+            <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+              <div style={{ color: "var(--navy)" }}>
+                <IconEmpty />
+              </div>
+              <h3
+                className="mt-5 text-lg font-black tracking-tight"
+                style={{ color: "var(--navy)" }}
+              >
+                {query ? "No se encontraron resultados" : "Sin plantillas todavía"}
+              </h3>
+              <p
+                className="mt-2 text-sm font-medium max-w-xs"
+                style={{ color: "rgba(5,20,36,0.45)" }}
+              >
+                {query 
+                  ? `No hay ninguna plantilla que coincida con "${query}".`
+                  : "Sube tu imagen base y define las coordenadas donde se imprimirán los números."}
+              </p>
+              {!query && (
+                <Link
+                  href="/dashboard/templates"
+                  className="mt-6 inline-flex items-center gap-2 px-6 py-2.5 font-black text-sm rounded-xl
+                             hover:opacity-90 transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                  style={{ background: "var(--accent)", color: "var(--navy)" }}
+                >
+                  <IconPlus />
+                  Crear primera plantilla
+                </Link>
+              )}
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {templates.map((template) => (
-              <div key={template.id} className="bg-white rounded-xl shadow-sm border border-[var(--accent)]/20 overflow-hidden flex flex-col">
-                <div className="h-40 overflow-hidden bg-[var(--surface)]/40 flex items-center justify-center p-4 relative">
+              <div
+                key={template.id}
+                className="group rounded-2xl border shadow-sm
+                           hover:shadow-lg hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col"
+                style={{
+                  background: "white",
+                  borderColor: "rgba(252,179,7,0.18)",
+                }}
+              >
+                {/* Imagen */}
+                <div
+                  className="relative h-44 flex items-center justify-center overflow-hidden"
+                  style={{ background: "var(--surface)" }}
+                >
+                  <div
+                    className="absolute inset-0 opacity-30"
+                    style={{
+                      backgroundImage: `radial-gradient(circle, var(--accent) 1px, transparent 1px)`,
+                      backgroundSize: "20px 20px",
+                    }}
+                    aria-hidden="true"
+                  />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={template.imageUrl} alt={template.name} className="max-h-full max-w-full object-contain drop-shadow-sm" />
+                  <img
+                    src={template.imageUrl}
+                    alt={template.name}
+                    className="relative z-10 max-h-36 max-w-[85%] object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300"
+                  />
+                  <span
+                    className="absolute top-3 right-3 z-10 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded-md shadow"
+                    style={{ background: "var(--navy)", color: "var(--accent)" }}
+                  >
+                    {template.maxPositions} pos.
+                  </span>
                 </div>
-                <div className="p-5 flex-1 flex flex-col justify-between border-t border-[var(--accent)]/10">
-                  <div>
-                    <h3 className="font-black text-[var(--navy)] text-lg line-clamp-1" title={template.name}>{template.name}</h3>
-                    <p className="text-xs text-[var(--navy)]/60 font-bold mt-1 uppercase tracking-wide">
-                      {template.maxPositions} posiciones mapeadas
-                    </p>
-                  </div>
-                  <div>
-                    <Link 
-                      href={`/dashboard/raffle/new?templateId=${template.id}`}
-                      className="mt-4 w-full block text-center py-2.5 bg-[var(--background)] text-[var(--navy)] font-black rounded-lg hover:bg-[var(--accent)] hover:text-white transition-all text-sm border border-[var(--accent)]/30"
+
+                {/* Info + acciones */}
+                <div
+                  className="p-4 flex-1 flex flex-col justify-between border-t"
+                  style={{ borderColor: "rgba(252,179,7,0.1)" }}
+                >
+                  <div className="mb-4">
+                    <h3
+                      className="font-black text-base leading-tight line-clamp-2"
+                      style={{ color: "var(--navy)" }}
+                      title={template.name}
                     >
+                      {template.name}
+                    </h3>
+                  </div>
+                  <div className="space-y-2">
+                    <Link
+                      href={`/dashboard/raffle/new?templateId=${template.id}`}
+                      className="flex items-center justify-center gap-2 w-full py-2.5 font-black text-xs rounded-xl
+                                 hover:opacity-90 active:scale-[0.98] transition-all duration-200 shadow-sm hover:shadow-md"
+                      style={{ background: "var(--primary)", color: "white" }}
+                    >
+                      <IconTicket className="w-4 h-4" />
                       Generar Rifa PDF
                     </Link>
-                    {/* Botón de eliminar plantilla integrado aquí */}
-                    <div className="mt-2 flex gap-2 justify-center items-center">
-                      <Link 
+                    <div className="flex gap-2">
+                      <Link
                         href={`/dashboard/templates/${template.id}`}
-                        className="text-xs font-bold px-3 py-1.5 rounded transition-colors bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 inline-block"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 text-[11px] font-black
+                                   rounded-xl border transition-all duration-150"
+                        style={{
+                          background: "var(--surface)",
+                          color: "var(--navy)",
+                          borderColor: "rgba(252,179,7,0.2)",
+                        }}
                       >
+                        <IconEdit />
                         Editar
                       </Link>
-                      <DeleteButton id={template.id} type="template" />
+                      <div className="flex-1">
+                        <DeleteButton id={template.id} type="template" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -101,103 +558,206 @@ export default async function DashboardPage({
         )}
       </section>
 
-      {/* =========================================
-          SECCIÓN 2: HISTORIAL DE RIFAS Y TAREAS
-      ========================================= */}
-      <section>
-        <div className="mb-6">
-          <h2 className="text-2xl font-black text-[var(--navy)] tracking-tight">Historial de Sorteos</h2>
-          <p className="text-[var(--navy)]/60 font-medium mt-1">
-            Monitorea el estado de generación de tus PDFs.
-          </p>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-[var(--accent)]/20 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-[var(--surface)]/50 text-[var(--navy)] border-b border-[var(--accent)]/20">
-                <tr>
-                  <th className="px-6 py-4 font-black tracking-wide uppercase text-xs">Sorteo</th>
-                  <th className="px-6 py-4 font-black tracking-wide uppercase text-xs">Rango</th>
-                  <th className="px-6 py-4 font-black tracking-wide uppercase text-xs">Configuración</th>
-                  <th className="px-6 py-4 font-black tracking-wide uppercase text-xs">Estado</th>
-                  <th className="px-6 py-4 font-black tracking-wide uppercase text-xs text-right">PDF</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--accent)]/10">
-                {raffles.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-[var(--navy)]/60 font-medium">
-                      Aún no has generado ninguna rifa.
-                    </td>
-                  </tr>
-                ) : (
-                  raffles.map((raffle) => (
-                    <tr key={raffle.id} className="hover:bg-[var(--background)]/30 transition-colors">
-                      <td className="px-6 py-4">
-                        <p className="font-bold text-[var(--navy)]">{raffle.name}</p>
-                        <p className="text-xs text-[var(--navy)]/60 mt-0.5">Base: {raffle.template.name}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="font-bold text-[var(--navy)] bg-[var(--surface)] px-2 py-1 rounded border border-[var(--accent)]/20">
-                          {String(raffle.rangeStart).padStart(raffle.digits, '0')} - {String(raffle.rangeEnd).padStart(raffle.digits, '0')}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-[var(--navy)]/80 text-xs font-bold">
-                          {raffle.digits} dígitos
-                        </p>
-                        <p className="text-[var(--navy)]/80 text-xs font-bold mt-0.5">
-                          {raffle.numbersPerTicket} núm/boleto
-                        </p>
-                      </td>
-                      <td className="px-6 py-4">
-                        {raffle.status === 'PENDING' && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> En cola
-                          </span>
-                        )}
-                        {raffle.status === 'PROCESSING' && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span> Procesando...
-                          </span>
-                        )}
-                        {raffle.status === 'COMPLETED' && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 border border-green-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Terminado
-                          </span>
-                        )}
-                        {raffle.status === 'FAILED' && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Error
-                          </span>
-                        )}
-                      </td>
-                      {/* Celda con flexbox para alinear el botón de descarga y el de eliminar */}
-                      <td className="px-6 py-4 text-right flex justify-end items-center gap-3">
-                        {raffle.pdfUrl ? (
-                          <a 
-                            href={raffle.pdfUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="inline-block px-4 py-1.5 bg-[var(--primary)] text-white text-xs font-bold rounded hover:bg-[var(--secondary)] transition-colors shadow-sm"
-                          >
-                            Descargar
-                          </a>
-                        ) : (
-                          <span className="text-xs font-bold text-[var(--navy)]/40">Generando...</span>
-                        )}
-                        {/* Botón de eliminar historial integrado aquí */}
-                        <DeleteButton id={raffle.id} type="raffle" />
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+{/* ══════════════════════════════════════════════════════════
+          GUÍA DE INICIO RÁPIDO — Onboarding Card
+      ══════════════════════════════════════════════════════════ */}
+      <section aria-label="Guía de inicio rápido">
+        <div
+          className="rounded-2xl overflow-hidden border shadow-sm"
+          style={{
+            background: "white",
+            borderColor: "rgba(252,179,7,0.2)",
+          }}
+        >
+          {/* Cabecera de la guía */}
+          <div
+            className="px-6 py-5 border-b flex items-center gap-3"
+            style={{
+              background: "var(--surface)",
+              borderColor: "rgba(252,179,7,0.15)",
+            }}
+          >
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ background: "var(--accent)", color: "var(--navy)" }}
+            >
+              <IconStar className="w-4 h-4" />
+            </div>
+            <div>
+              <p
+                className="text-[10px] font-black uppercase tracking-[0.2em]"
+                style={{ color: "var(--secondary)" }}
+              >
+                Bienvenido al sistema
+              </p>
+              <h2
+                className="text-lg font-black tracking-tight leading-none"
+                style={{ color: "var(--navy)" }}
+              >
+                Guía de Inicio Rápido
+              </h2>
+            </div>
+            <span
+              className="ml-auto text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full"
+              style={{
+                background: "rgba(244,53,10,0.08)",
+                color: "var(--primary)",
+              }}
+            >
+              3 pasos
+            </span>
           </div>
-          {/* Componente de paginación integrado aquí, justo debajo de la tabla */}
-          <Pagination totalPages={totalPages} />
+
+          {/* Pasos */}
+          <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            {/* Paso 1 */}
+            <div className="group flex flex-col gap-4">
+              <div className="flex items-center gap-3">
+                {/* Badge numérico */}
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center font-black text-lg flex-shrink-0 shadow-sm"
+                  style={{ background: "var(--primary)", color: "white" }}
+                >
+                  1
+                </div>
+                <div
+                  className="flex-1 h-px"
+                  style={{ background: "rgba(244,53,10,0.15)" }}
+                  aria-hidden="true"
+                />
+              </div>
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center"
+                style={{ background: "rgba(244,53,10,0.07)", color: "var(--primary)" }}
+              >
+                <IconLayout className="w-6 h-6" />
+              </div>
+              <div>
+                <h3
+                  className="font-black text-base tracking-tight"
+                  style={{ color: "var(--navy)" }}
+                >
+                  Crear o Editar Plantilla
+                </h3>
+                <p
+                  className="mt-1.5 text-sm leading-relaxed"
+                  style={{ color: "rgba(5,20,36,0.55)" }}
+                >
+                  Sube la imagen base de tu rifa y haz clic para marcar las{" "}
+                  <strong style={{ color: "var(--navy)" }}>coordenadas exactas</strong>{" "}
+                  donde se imprimirán los números.
+                </p>
+              </div>
+              <Link
+                href="/dashboard/templates"
+                className="mt-auto inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider
+                           hover:gap-2.5 transition-all duration-200"
+                style={{ color: "var(--primary)" }}
+              >
+                Ir a plantillas <IconArrow className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            {/* Divisor vertical — solo md+ */}
+            <div
+              className="hidden md:block absolute self-stretch w-px my-2"
+              aria-hidden="true"
+            />
+
+            {/* Paso 2 */}
+            <div className="group flex flex-col gap-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center font-black text-lg flex-shrink-0 shadow-sm"
+                  style={{ background: "var(--secondary)", color: "white" }}
+                >
+                  2
+                </div>
+                <div
+                  className="flex-1 h-px"
+                  style={{ background: "rgba(252,86,6,0.15)" }}
+                  aria-hidden="true"
+                />
+              </div>
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center"
+                style={{ background: "rgba(252,86,6,0.07)", color: "var(--secondary)" }}
+              >
+                <IconTicket className="w-6 h-6" />
+              </div>
+              <div>
+                <h3
+                  className="font-black text-base tracking-tight"
+                  style={{ color: "var(--navy)" }}
+                >
+                  Configurar Sorteo
+                </h3>
+                <p
+                  className="mt-1.5 text-sm leading-relaxed"
+                  style={{ color: "rgba(5,20,36,0.55)" }}
+                >
+                  Ingresa el nombre, el{" "}
+                  <strong style={{ color: "var(--navy)" }}>rango numérico</strong>, la
+                  cantidad de dígitos y cuántos números lleva cada boleto.
+                </p>
+              </div>
+              <span
+                className="mt-auto inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider"
+                style={{ color: "rgba(5,20,36,0.3)" }}
+              >
+                Desde una plantilla activa
+              </span>
+            </div>
+
+            {/* Paso 3 */}
+            <div className="group flex flex-col gap-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center font-black text-lg flex-shrink-0 shadow-sm"
+                  style={{ background: "var(--accent)", color: "var(--navy)" }}
+                >
+                  3
+                </div>
+                <div
+                  className="flex-1 h-px"
+                  style={{ background: "rgba(252,179,7,0.2)" }}
+                  aria-hidden="true"
+                />
+              </div>
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center"
+                style={{ background: "rgba(252,179,7,0.1)", color: "var(--accent)" }}
+              >
+                <IconDownload className="w-6 h-6" />
+              </div>
+              <div>
+                <h3
+                  className="font-black text-base tracking-tight"
+                  style={{ color: "var(--navy)" }}
+                >
+                  Descargar y Listo
+                </h3>
+                <p
+                  className="mt-1.5 text-sm leading-relaxed"
+                  style={{ color: "rgba(5,20,36,0.55)" }}
+                >
+                  El{" "}
+                  <strong style={{ color: "var(--navy)" }}>PDF se compila</strong>{" "}
+                  automáticamente y queda disponible para descarga en el historial.
+                </p>
+              </div>
+              <Link
+                href="/dashboard/history"
+                className="mt-auto inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider
+                           hover:gap-2.5 transition-all duration-200"
+                style={{ color: "var(--accent)" }}
+              >
+                Ver historial <IconArrow className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+          </div>
         </div>
       </section>
 
